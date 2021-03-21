@@ -16,6 +16,7 @@ package main
 
 import "log"
 
+// main method for starting the application / proxy.
 func main() {
 	err := startProxy()
 

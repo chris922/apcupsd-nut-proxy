@@ -24,6 +24,7 @@ import (
 	"time"
 )
 
+// startProxy starts the proxy server.
 func startProxy() error {
 	config := Config{
 		vars: map[string]VarLoader{
@@ -52,8 +53,8 @@ func startProxy() error {
 			"ups.timer.start":       FixedValue("-1"),
 			"ups.timer.shutdown":    FixedValue("-1"),
 
-			"battery.runtime":         UpsBatteryRuntime,
-			"battery.runtime.low":     UpsBatteryRuntimeLow,
+			"battery.runtime":         ApcValueMinInSec("TIMELEFT", IgnoreValue),
+			"battery.runtime.low":     ApcValueMinInSec("DLOWBATT", IgnoreValue),
 			"battery.charge":          ApcValue("BCHARGE", IgnoreValue),
 			"battery.charge.low":      ApcValue("MBATTCHG", IgnoreValue),
 			"battery.charge.warning":  FixedValue("50"),
@@ -117,6 +118,7 @@ func startProxy() error {
 	}
 }
 
+// handleConnection will be invoked for each new connection and will handle all incoming commands.
 func handleConnection(c net.Conn, config *Config) {
 	defer c.Close()
 

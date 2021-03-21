@@ -42,7 +42,8 @@ func TestApcValue_reload(t *testing.T) {
  UPSNAME : name
 `
 
-	err := apcValues.reload(&config, testExecCommand(output))
+	apcValues.exec = testExecCommand(output)
+	err := apcValues.reload(&config)
 	assert.NoError(t, err)
 
 	assert.Len(t, apcValues.values, 2)

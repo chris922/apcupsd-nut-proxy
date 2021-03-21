@@ -21,17 +21,25 @@ import (
 	"strings"
 )
 
+// A VarLoader is a function that will be attached to NUT variables and load these values. It can access the
+// configuration and apc values to retrieve the value.
 type VarLoader func(name string, config *Config, av IApcValues) (string, error)
 
+// FixedValue is a function that creates a VarLoader which always returns the given string value.
 func FixedValue(value string) func(name string, config *Config, av IApcValues) (string, error) {
 	return func(name string, config *Config, av IApcValues) (string, error) {
 		return value, nil
 	}
 }
 
+// IgnoreValue is a preconfigured FixedValue VarLoader always returning an empty string.
 var IgnoreValue = FixedValue("")
 
-func FormattedValue(format string, varLoaders ...VarLoader) func(name string, config *Config, av IApcValues) (string, error) {
+// FormattedValue is a function that creates a VarLoader which accepts a format and other VarLoader of which the results
+// will be used for the given format.
+func FormattedValue(format string, varLoaders ...VarLoader) func(name string, config *Config,
+	av IApcValues) (string, error) {
+
 	return func(name string, config *Config, av IApcValues) (string, error) {
 		values := make([]interface{}, len(varLoaders))
 
@@ -47,6 +55,7 @@ func FormattedValue(format string, varLoaders ...VarLoader) func(name string, co
 	}
 }
 
+// ApcValue is a function that creates a VarLoader which retrieves the value of the apc values by the given apc key.
 func ApcValue(apcKey string, fallback VarLoader) func(name string, config *Config, av IApcValues) (string, error) {
 	return func(name string, config *Config, av IApcValues) (string, error) {
 		value, ok := av.getOk(apcKey)
@@ -58,14 +67,43 @@ func ApcValue(apcKey string, fallback VarLoader) func(name string, config *Confi
 	}
 }
 
+// ApcValueMinInSec is a function that creates a VarLoader that retrieves an apc value by its key, converts it to a
+// float and returns this one multiplied by 60. Assuming the apc value is in minutes, this will ensure the result is in
+// minutes.
+func ApcValueMinInSec(apcKey string, fallback VarLoader) func(name string, config *Config, av IApcValues) (string, error) {
+	return func(name string, config *Config, av IApcValues) (string, error) {
+		apcValue, err := ApcValue(apcKey, fallback)(name, config, av)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		if apcValue == "" {
+			return "", nil
+		}
+
+		val, err := strconv.ParseFloat(apcValue, 32)
+		if err != nil {
+			return "", errors.Wrapf(err, "Couldn't format %s value %s as float", apcKey, apcValue)
+		}
+
+		// from minutes to seconds by multiplying with 60
+		return strconv.Itoa(int(val * 60)), nil
+	}
+}
+
+// the following VarLoader are there for any kind of variables that are not the same as the one e.g. available in the
+// apc values, but need some extra conversion to return the response expected by NUT.
+
+// UpsName is a VarLoader that returns the UPS name.
 func UpsName(name string, config *Config, av IApcValues) (string, error) {
 	return config.upsName, nil
 }
 
+// UpsDescription is a VarLoader that returns the UPS description.
 func UpsDescription(name string, config *Config, av IApcValues) (string, error) {
 	return config.upsDescription, nil
 }
 
+// UpsModel is a VarLoader that returns the UPS model based on the corresponding apc values.
 func UpsModel(name string, config *Config, av IApcValues) (string, error) {
 	value, err := ApcValue("MODEL", IgnoreValue)(name, config, av)
 	if err != nil {
@@ -83,6 +121,7 @@ func UpsModel(name string, config *Config, av IApcValues) (string, error) {
 	return value, nil
 }
 
+// UpsStatus is a VarLoader that returns the UPS status based on the corresponding apc values.
 func UpsStatus(name string, config *Config, av IApcValues) (string, error) {
 	value, err := ApcValue("STATUS", IgnoreValue)(name, config, av)
 	if err != nil {
@@ -127,23 +166,8 @@ func UpsStatus(name string, config *Config, av IApcValues) (string, error) {
 
 	return IgnoreValue(name, config, av)
 }
-/*UPS_STATUS=""
 
-if [[ $VALUE == *"ONLINE"* ]]; then
-								UPS_STATUS="OL $UPS_STATUS";
-								if [ $BATTNOTFULL = 1 ]; then UPS_STATUS="CHRG $UPS_STATUS"; fi
-							   fi
-if [[ $VALUE == *"ONBATT"* ]]; then UPS_STATUS="OB DISCHRG $UPS_STATUS"; fi
-if [[ $VALUE == *"LOWBATT"* ]]; then UPS_STATUS="LB $UPS_STATUS"; fi
-if [[ $VALUE == *"CAL"* ]]; then UPS_STATUS="CAL $UPS_STATUS"; fi
-if [[ $VALUE == *"OVERLOAD"* ]]; then UPS_STATUS="OVER $UPS_STATUS"; fi
-if [[ $VALUE == *"TRIM"* ]]; then UPS_STATUS="TRIM $UPS_STATUS"; fi
-if [[ $VALUE == *"BOOST"* ]]; then UPS_STATUS="BOOST $UPS_STATUS"; fi
-if [[ $VALUE == *"REPLACEBATT"* ]]; then UPS_STATUS="RB $UPS_STATUS"; fi
-if [[ $VALUE == *"SHUTTING DOWN"* ]]; then UPS_STATUS="SD $UPS_STATUS"; fi
-if [[ $VALUE == *"COMMLOST"* ]]; then UPS_STATUS="OFF $UPS_STATUS"; fi
-UPS_STATUS="$(echo -e "${UPS_STATUS}" | sed -e 's/[[:space:]]*$//')"*/
-
+// UpsSelfTest is a VarLoader that returns the UPS self test results based on the corresponding apc values.
 func UpsSelfTest(name string, config *Config, av IApcValues) (string, error) {
 	value, err := ApcValue("SELFTEST", IgnoreValue)(name, config, av)
 	if err != nil {
@@ -168,34 +192,3 @@ func UpsSelfTest(name string, config *Config, av IApcValues) (string, error) {
 
 	return IgnoreValue(name, config, av)
 }
-/*SELFTEST)	if [[ $VALUE == *"OK"* ]]; then UPS_SELFTEST="OK - Battery GOOD";
-elif [[ $VALUE == *"BT"* ]]; then UPS_SELFTEST="FAILED - Battery Capacity LOW";
-elif [[ $VALUE == *"NG"* ]]; then UPS_SELFTEST="FAILED - Overload";
-elif [[ $VALUE == *"NO"* ]]; then UPS_SELFTEST="No Test in the last 5mins";
-fi;;*/
-
-func ApcValueMinInSec(apcKey string, fallback VarLoader) func(name string, config *Config, av IApcValues) (string, error) {
-	return func(name string, config *Config, av IApcValues) (string, error) {
-		apcValue, err := ApcValue(apcKey, fallback)(name, config, av)
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
-		if apcValue == "" {
-			return "", nil
-		}
-
-		val, err := strconv.ParseFloat(apcValue, 32)
-		if err != nil {
-			return "", errors.Wrapf(err, "Couldn't format %s value %s as float", apcKey, apcValue)
-		}
-
-		// from minutes to seconds by multiplying with 60
-		return strconv.Itoa(int(val * 60)), nil
-	}
-}
-
-var UpsBatteryRuntime = ApcValueMinInSec("TIMELEFT", IgnoreValue)
-/*TIMELEFT)	let UPS_TIMELEFT="$(echo -e "${VALUE}" | cut -d'.' -f1)"*60;;	#only use string before ".", multiply with 60 for value in seconds*/
-
-var UpsBatteryRuntimeLow = ApcValueMinInSec("DLOWBATT", IgnoreValue)
-/*DLOWBATT)	let UPS_DLOWBATT="$(echo -e "${VALUE}" | cut -d'.' -f1)"*60;;	#low battery runtime [min] * 60 for seconds*/

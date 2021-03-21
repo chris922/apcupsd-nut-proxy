@@ -24,8 +24,8 @@ type mockApcValues struct {
 	mock.Mock
 }
 
-func (m *mockApcValues) reload(config *Config, exec execCmd) error {
-	args := m.Called(config, exec)
+func (m *mockApcValues) reload(config *Config) error {
+	args := m.Called(config)
 	return args.Error(0)
 }
 
