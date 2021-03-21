@@ -20,6 +20,7 @@ import (
 	"strings"
 )
 
+// commandReceived handles a command that was received.
 func commandReceived(command string, config *Config, apcValues IApcValues) (string, bool, error) {
 	if strings.HasPrefix(command, "LOGIN ") {
 		upsName := command[6:]
@@ -52,6 +53,7 @@ func commandReceived(command string, config *Config, apcValues IApcValues) (stri
 	}
 }
 
+// commandListUps handles the LIST UPS command.
 func commandListUps(config *Config) (string, bool, error) {
 	var resp strings.Builder
 
@@ -62,13 +64,15 @@ func commandListUps(config *Config) (string, bool, error) {
 	return resp.String(), false, nil
 }
 
+// commandListVar handles the LIST VAR command.
+// It reloads the apc values to ensure the values are up-to-date.
 func commandListVar(command string, config *Config, apcValues IApcValues) (string, bool, error) {
 	upsName := command[9:]
 	if upsName != config.upsName {
 		return "ERR UNKNOWN-UPS", false, nil
 	}
 
-	err := apcValues.reload(config, execCommand)
+	err := apcValues.reload(config)
 	if err != nil {
 		return "", false, errors.WithStack(err)
 	}
@@ -94,6 +98,8 @@ func commandListVar(command string, config *Config, apcValues IApcValues) (strin
 	return sb.String(), false, nil
 }
 
+// commandGetVar handles the GET VAR command.
+// It reloads the apc values to ensure the values are up-to-date.
 func commandGetVar(command string, config *Config, apcValues IApcValues) (string, bool, error) {
 	upsAndVarName := strings.Split(command[8:], " ")
 
@@ -105,7 +111,7 @@ func commandGetVar(command string, config *Config, apcValues IApcValues) (string
 	}
 	varName := upsAndVarName[1]
 
-	err := apcValues.reload(config, execCommand)
+	err := apcValues.reload(config)
 	if err != nil {
 		return "", false, errors.WithStack(err)
 	}
@@ -123,6 +129,8 @@ func commandGetVar(command string, config *Config, apcValues IApcValues) (string
 	return fmt.Sprintf("VAR %s %s \"%s\"\n", config.upsName, varName, value), false, nil
 }
 
+// commandSetVar handles the SET VAR command.
+// This command is not supported and thus all values are readonly and the corresponding error will always be returned.
 func commandSetVar(command string, config *Config) (string, bool, error) {
 	upsAndVarName := strings.Split(command[8:], " ")
 

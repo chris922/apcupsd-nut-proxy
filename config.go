@@ -20,6 +20,7 @@ import (
 	"time"
 )
 
+// Config contains the application configuration.
 type Config struct {
 	address string
 	port    int
@@ -36,6 +37,7 @@ type Config struct {
 	vars map[string]VarLoader
 }
 
+// loadProgramArgs loads the program arguments and stores them in the config.
 func (c *Config) loadProgramArgs() {
 	flag.StringVar(&c.address, "address", "127.0.0.1",
 		"Address on which the server should listen "+
@@ -61,6 +63,7 @@ func (c *Config) loadProgramArgs() {
 	flag.Parse()
 }
 
+// String returns the configuration as a string.
 func (c Config) String() string {
 	return fmt.Sprintf("Config(address=%s, port=%d, targetAddress=%s, "+
 		"upsName=\"%s\", upsDescription=\"%s\", apcAccessExecutable=%s, timeout=%s)",

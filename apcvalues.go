@@ -23,28 +23,44 @@ import (
 	"time"
 )
 
+// IApcValues are used to store values returned by apcaccess
+// It provides the functionality to reload these values and retrieve them.
+type IApcValues interface {
+	// reload will load the apc values for the given config by using the given exec function.
+	reload(config *Config) error
+
+	// get retrieves the value by name, returns an empty string if the value was not found
+	get(name string) string
+	// getOk retrieves the value by name, returns a false flag if the value was not found
+	getOk(name string) (string, bool)
+}
+
+// NewApcValues creates a new instance of ApcValues
 func NewApcValues() *ApcValues {
 	return &ApcValues{
 		values:      make(map[string]string),
 		refreshTime: time.Unix(0, 0),
+
+		exec: execCommand,
 	}
 }
 
-type IApcValues interface {
-	reload(config *Config, exec execCmd) error
-
-	get(name string) string
-	getOk(name string) (string, bool)
-}
-
+// ApcValues is the base implementation of IApcValues
 type ApcValues struct {
+	// stored values
 	values map[string]string
 
+	// last time the values were refreshed
 	refreshTime time.Time
+
+	// will be used to invoke the apcaccess command
+	exec execCmd
 }
 
+// function signature for executing a command
 type execCmd func(string, ...string) ([]byte, error)
 
+// executes a command by using exec.Command
 func execCommand(name string, arg ...string) ([]byte, error) {
 	var out bytes.Buffer
 	writer := bufio.NewWriter(&out)
@@ -59,8 +75,9 @@ func execCommand(name string, arg ...string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-func (ar *ApcValues) reload(config *Config, exec execCmd) error {
-	out, err := exec(config.apcAccessExecutable, "-h", config.targetAddress, "-u")
+// reloads the apc values
+func (ar *ApcValues) reload(config *Config) error {
+	out, err := ar.exec(config.apcAccessExecutable, "-h", config.targetAddress, "-u")
 	if err != nil {
 		return errors.Wrapf(err, "Error invoking apcaccess")
 	}
@@ -97,10 +114,12 @@ func (ar *ApcValues) reload(config *Config, exec execCmd) error {
 	return nil
 }
 
+// get retrieves the value by name, returns an empty string if the value was not found
 func (av *ApcValues) get(name string) string {
 	return av.values[name]
 }
 
+// getOk retrieves the value by name, returns a false flag if the value was not found
 func (av *ApcValues) getOk(name string) (string, bool) {
 	val, found := av.values[name]
 
